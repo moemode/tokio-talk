@@ -1,13 +1,6 @@
-#![warn(clippy::await_holding_refcell_ref)]
-
 //! A chat server implementation using tokio with non-blocking I/O.
-//!
-//! The server is designed to be single-threaded and supports multiple concurrent client connections
-//! using async/await. It provides basic chat functionality including direct messages and broadcasts.
-//!
-//! # Threading
-//! The server uses spawn_local to spawn the threads, which are !Send because they use Rc<RefCell<>>.
-//! As it is single-threaded, it uses `Rc<RefCell<>>` for shared state management.
+
+#![warn(clippy::await_holding_refcell_ref)]
 
 pub use crate::server::RunningServer;
 

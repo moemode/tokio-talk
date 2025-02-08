@@ -1,7 +1,8 @@
 /// Single-threaded async chat server
 ///
 /// #Implementation Notes
-/// The server is single-threaded and uses `Rc<RefCell<>>` for shared state.
+/// The server is single-threaded and supports multiple concurrent client connections
+/// using futures. State shared by client handlers is stored in a  `Rc<RefCell<>>`.
 /// Care is taken not to hold `RefCell` borrows across `await` points to prevent
 /// deadlocks and maintain the aliasing XOR mutability invariant.
 ///
