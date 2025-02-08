@@ -199,6 +199,71 @@ async fn handle_client(
     Ok(())
 }
 
+/// Handles broadcasting a message to all other connected clients
+///
+/// # Arguments
+/// * `message` - The message to broadcast
+/// * `sender_name` - Name of the client sending the broadcast
+/// * `clients` - Map of all connected clients
+async fn handle_broadcast(
+    message: String,
+    sender_name: &str,
+    clients: &ClientMap,
+) -> anyhow::Result<()> {
+    for (client_name, channel) in clients.borrow().iter() {
+        if client_name != sender_name {
+            channel.send(ServerToClientMsg::Message {
+                from: sender_name.into(),
+                message: message.clone(),
+            })?;
+        }
+    }
+    Ok(())
+}
+
+/// Handles sending a direct message to a specific client
+///
+/// # Arguments
+/// * `to` - Name of the recipient
+/// * `message` - The message to send
+/// * `sender_name` - Name of the client sending the message
+/// * `writer` - Writer to send error responses
+/// * `clients` - Map of all connected clients
+///
+/// # Errors
+/// Returns error if:
+/// * Trying to send message to self
+/// * Recipient does not exist
+async fn handle_direct_message(
+    to: String,
+    message: String,
+    sender_name: &str,
+    writer: &mut MessageWriter<ServerToClientMsg, OwnedWriteHalf>,
+    clients: &ClientMap,
+) -> anyhow::Result<()> {
+    if to == sender_name {
+        writer
+            .send(ServerToClientMsg::Error(
+                "Cannot send a DM to yourself".to_owned(),
+            ))
+            .await?;
+        return Ok(());
+    }
+    if let Some(channel) = clients.borrow().get(&to) {
+        channel.send(ServerToClientMsg::Message {
+            from: sender_name.into(),
+            message,
+        })?;
+        return Ok(());
+    }
+    writer
+        .send(ServerToClientMsg::Error(format!(
+            "User {to} does not exist"
+        )))
+        .await?;
+    Ok(())
+}
+
 /// Processes an individual client message and generates appropriate responses.
 ///
 /// # Message Handling
@@ -232,37 +297,10 @@ async fn react_client_msg(
             writer.send(ServerToClientMsg::UserList { users }).await?;
         }
         ClientToServerMsg::Broadcast { message } => {
-            for (client_name, channel) in clients.borrow().iter() {
-                if client_name != name {
-                    channel.send(ServerToClientMsg::Message {
-                        from: name.into(),
-                        message: message.clone(),
-                    })?;
-                }
-            }
+            handle_broadcast(message, name, clients).await?;
         }
         ClientToServerMsg::SendDM { to, message } => {
-            if to == *name {
-                writer
-                    .send(ServerToClientMsg::Error(
-                        "Cannot send a DM to yourself".to_owned(),
-                    ))
-                    .await?;
-                return Ok(());
-            }
-            if let Some(channel) = clients.borrow().get(&to) {
-                channel.send(ServerToClientMsg::Message {
-                    from: name.into(),
-                    message,
-                })?;
-                return Ok(());
-            }
-            writer
-                .send(ServerToClientMsg::Error(format!(
-                    "User {to} does not exist"
-                )))
-                .await?;
-            return Ok(());
+            handle_direct_message(to, message, name, writer, clients).await?;
         }
         _ => {
             writer
