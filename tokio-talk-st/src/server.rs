@@ -43,6 +43,13 @@ type ClientMap = Rc<RefCell<HashMap<String, ClientChannel>>>;
 /// The server is single-threaded and uses `Rc<RefCell<>>` for shared state.
 /// Care is taken not to hold `RefCell` borrows across `await` points to prevent
 /// deadlocks and maintain the aliasing XOR mutability invariant.
+///
+/// The server uses a message-passing architecture where each client has a dedicated
+/// channel stored in `Rc<RefCell<Map<ClientName, Channel>>>`. Instead of writing directly
+/// to client sockets, DMs and broadcasts are sent through these channels. Each client
+/// task runs a `select!` loop that sequentially processes messages from both its socket
+/// and channel, ensuring atomic message delivery and preventing interleaving of concurrent
+/// messages that could corrupt the protocol.
 pub struct RunningServer {
     /// Maximum number of clients that can be connected to the server
     max_clients: usize,
@@ -160,8 +167,14 @@ async fn join_client(
 /// # Protocol Flow
 /// 1. Performs initial client join handshake
 /// 2. Sets up message channels for client communication
-/// 3. Continuously processes incoming client messages and outgoing server messages
+/// 3. Runs a `select!` loop that multiplexes:
+///    - Incoming socket messages from the client
+///    - Channel messages (DMs/broadcasts) from other clients
 /// 4. Removes client from active clients when connection ends
+///
+/// The channel-based design ensures that concurrent messages (DMs/broadcasts)
+/// are processed sequentially and atomically, preventing message interleaving
+/// that could corrupt the protocol state.
 ///
 /// # Arguments
 /// * `reader` - Stream for receiving messages from the client
