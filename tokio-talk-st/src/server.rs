@@ -242,11 +242,7 @@ async fn handle_direct_message(
     clients: &ClientMap,
 ) -> anyhow::Result<()> {
     if to == sender_name {
-        writer
-            .send(ServerToClientMsg::Error(
-                "Cannot send a DM to yourself".to_owned(),
-            ))
-            .await?;
+        send_error(writer, "Cannot send a DM to yourself").await?;
         return Ok(());
     }
     if let Some(channel) = clients.borrow().get(&to) {
@@ -256,10 +252,16 @@ async fn handle_direct_message(
         })?;
         return Ok(());
     }
+    send_error(writer, &format!("User {to} does not exist")).await?;
+    Ok(())
+}
+
+async fn send_error(
+    writer: &mut MessageWriter<ServerToClientMsg, OwnedWriteHalf>,
+    error: &str,
+) -> anyhow::Result<()> {
     writer
-        .send(ServerToClientMsg::Error(format!(
-            "User {to} does not exist"
-        )))
+        .send(ServerToClientMsg::Error(error.to_owned()))
         .await?;
     Ok(())
 }
