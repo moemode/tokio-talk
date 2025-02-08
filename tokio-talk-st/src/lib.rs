@@ -561,28 +561,6 @@ mod tests {
         .await;
     }
 
-    /*
-    #[tokio::test]
-    async fn message_timeout() {
-        run_test(opts(2), |spawner| async move {
-            let mut niko = spawner.client().await;
-            niko.join("Niko").await;
-
-            sleep(1000).await;
-            niko.ping().await;
-            sleep(1000).await;
-            niko.list_users().await;
-            sleep(4000).await;
-
-            niko.expect_error("Timeouted").await;
-            niko.check_closed().await;
-
-            Ok(())
-        })
-        .await;
-    }
-    */
-
     // This test runs for ~10s
     #[tokio::test]
     async fn message_timeout_receiving_dms() {

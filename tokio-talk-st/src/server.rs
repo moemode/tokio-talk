@@ -55,7 +55,7 @@ pub struct RunningServer {
 }
 
 async fn run_server(
-    mut rx: tokio::sync::oneshot::Receiver<()>,
+    mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     listener: tokio::net::TcpListener,
     max_clients: usize,
 ) -> anyhow::Result<()> {
@@ -63,7 +63,7 @@ async fn run_server(
     let mut tasks = JoinSet::new();
     loop {
         tokio::select! {
-            _ = &mut rx => {
+            _ = &mut shutdown_rx => {
                 break;
             }
             Ok((client, _)) = listener.accept() => {
@@ -133,9 +133,22 @@ async fn join_client(
     }
 }
 
-/// Then it should start receiving requests from the client.
-/// - If the client ever sends the `Join` message again, the server should respond with an error
-/// "Unexpected message received" and disconnect the client immediately.
+/// Handles a connected client's message flow after successful connection.
+///
+/// # Protocol Flow
+/// 1. Performs initial client join handshake
+/// 2. Sets up message channels for client communication
+/// 3. Continuously processes incoming client messages and outgoing server messages
+/// 4. Removes client from active clients when connection ends
+///
+/// # Arguments
+/// * `reader` - Stream for receiving messages from the client
+/// * `writer` - Stream for sending messages to the client
+/// * `clients` - Shared map of all connected clients and their message channels
+///
+/// # Returns
+/// * `Ok(())` when client disconnects normally
+/// * `Err` if there are communication errors
 async fn handle_client(
     mut reader: MessageReader<ClientToServerMsg, OwnedReadHalf>,
     mut writer: MessageWriter<ServerToClientMsg, OwnedWriteHalf>,
@@ -164,25 +177,24 @@ async fn handle_client(
     Ok(())
 }
 
-/// pub enum ClientToServerMsg {
-/// This is the first message in the communication, which should be sent by the client.
-/// When some other client with the same name already exists, the server should respond
-/// with an error "Username already taken" and disconnect the new client.
-/// Join { name: String },
-/// This message checks that the connection is OK.
-/// The server should respond with [ServerToClientMsg::Pong].
-/// Ping,
-/// Send a request to list the usernames of users currently connected to the server.
-/// The order of the usernames is not important.
-/// ListUsers,
-/// Sends a direct message to the user with the given name (`to`).
-/// If the user does not exist, the server responds with an error "User <to> does not exist".
-/// If the client tries to send a message to themselves, the server responds with an error
-/// "Cannot send a DM to yourself".
-/// SendDM { to: String, message: String },
-/// Sends a message to all currently connected users (except for the sender of the broadcast).
-/// Broadcast { message: String },
-/// }
+/// Processes an individual client message and generates appropriate responses.
+///
+/// # Message Handling
+/// * `Ping` - Responds with `Pong`
+/// * `ListUsers` - Responds with list of connected usernames
+/// * `Broadcast` - Sends message to all other connected clients
+/// * `SendDM` - Delivers direct message to specific client
+/// * Other messages - Responds with error and disconnects client
+///
+/// # Arguments
+/// * `msg` - The client message to process
+/// * `name` - Username of the sending client
+/// * `writer` - Stream for sending responses back to client
+/// * `clients` - Shared map of all connected clients
+///
+/// # Returns
+/// * `Ok(())` if message was handled successfully
+/// * `Err` for protocol violations or communication errors
 async fn react_client_msg(
     msg: ClientToServerMsg,
     name: &str,
@@ -242,6 +254,20 @@ async fn react_client_msg(
     Ok(())
 }
 
+/// Represents a running chat server instance.
+///
+/// This struct encapsulates a TCP server that:
+/// * Accepts client connections up to a configured maximum
+/// * Manages client message routing and state
+/// * Can be gracefully shutdown via the shutdown channel
+///
+/// # Fields
+/// * `max_clients` - Maximum number of concurrent client connections
+/// * `port` - Port number the server is listening on
+/// * `future` - The main server task that processes connections
+/// * `tx` - Shutdown signal sender
+///
+/// The server runs on localhost (127.0.0.1) with a randomly assigned port.
 impl RunningServer {
     pub async fn new(max_clients: usize) -> anyhow::Result<Self> {
         let (tx, rx) = tokio::sync::oneshot::channel();
