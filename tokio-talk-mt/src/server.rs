@@ -209,10 +209,59 @@ async fn handle_client(
 /// Handles sending an error message to a client
 async fn send_error(writer: &SharedWriter, error_msg: String) -> anyhow::Result<()> {
     let mut locked_writer = writer.lock().await;
-    locked_writer.send(ServerToClientMsg::Error(error_msg)).await
+    locked_writer
+        .send(ServerToClientMsg::Error(error_msg))
+        .await
 }
 
-/// Processes an individual client message and send appropriate responses.
+/// Broadcast a message to all clients except the sender
+async fn broadcast(
+    name: &str,
+    message: String,
+    clients_guard: &HashMap<String, SharedWriter>,
+) -> anyhow::Result<()> {
+    for (client_name, writer) in clients_guard.iter() {
+        if client_name != name {
+            let mut writer = writer.lock().await;
+            writer
+                .send(ServerToClientMsg::Message {
+                    from: name.into(),
+                    message: message.clone(),
+                })
+                .await?;
+        }
+    }
+    Ok(())
+}
+
+/// Send a direct message to a specific client
+async fn dm(
+    from: &str,
+    to: String,
+    message: String,
+    sender: &SharedWriter,
+    clients_guard: &HashMap<String, SharedWriter>,
+) -> anyhow::Result<()> {
+    if to == from {
+        return send_error(sender, "Cannot send a DM to yourself".to_owned()).await;
+    }
+    let target = match clients_guard.get(&to) {
+        Some(writer) => writer,
+        None => {
+            return send_error(sender, format!("User {to} does not exist")).await;
+        }
+    };
+    let mut writer = target.lock().await;
+    writer
+        .send(ServerToClientMsg::Message {
+            from: from.into(),
+            message,
+        })
+        .await?;
+    Ok(())
+}
+
+/// Processes an individual client message and sends appropriate responses.
 ///
 /// # Message Handling
 /// * `Ping` - Responds with `Pong`
@@ -224,6 +273,7 @@ async fn send_error(writer: &SharedWriter, error_msg: String) -> anyhow::Result<
 /// # Arguments
 /// * `msg` - The client message to process
 /// * `name` - Username of the sending client
+/// * `writer` - Stream for sending responses back to client
 /// * `clients` - Shared map of all connected clients
 ///
 /// # Returns
@@ -239,7 +289,6 @@ async fn react_client_msg(
         Some(writer) => writer,
         None => return Ok(()),
     };
-
     match msg {
         ClientToServerMsg::Ping => {
             let mut writer = sender.lock().await;
@@ -251,37 +300,10 @@ async fn react_client_msg(
             writer.send(ServerToClientMsg::UserList { users }).await?;
         }
         ClientToServerMsg::Broadcast { message } => {
-            for (client_name, writer) in clients_guard.iter() {
-                if client_name != name {
-                    let mut writer = writer.lock().await;
-                    writer
-                        .send(ServerToClientMsg::Message {
-                            from: name.into(),
-                            message: message.clone(),
-                        })
-                        .await?;
-                }
-            }
+            broadcast(name, message, &clients_guard).await?;
         }
         ClientToServerMsg::SendDM { to, message } => {
-            if to == *name {
-                return send_error(sender, "Cannot send a DM to yourself".to_owned()).await;
-            }
-
-            let target = match clients_guard.get(&to) {
-                Some(writer) => writer,
-                None => {
-                    return send_error(sender, format!("User {to} does not exist")).await;
-                }
-            };
-
-            let mut writer = target.lock().await;
-            writer
-                .send(ServerToClientMsg::Message {
-                    from: name.into(),
-                    message,
-                })
-                .await?;
+            dm(name, to, message, sender, &clients_guard).await?;
         }
         _ => {
             send_error(sender, "Unexpected message received".to_owned()).await?;
