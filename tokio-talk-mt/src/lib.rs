@@ -3,6 +3,7 @@
 
 pub use crate::server::RunningServer;
 
+pub mod client;
 mod messages;
 mod reader;
 mod writer;
@@ -20,16 +21,13 @@ pub async fn run_server(opts: ServerOpts) -> anyhow::Result<RunningServer> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::client::{Client, ClientSpawner};
     use crate::messages::{ClientToServerMsg, ServerToClientMsg};
-    use crate::reader::MessageReader;
-    use crate::writer::MessageWriter;
-    use crate::{run_server, ServerOpts};
     use std::cell::{Cell, RefCell};
     use std::future::Future;
     use std::rc::Rc;
     use std::time::Duration;
-    use tokio::io::AsyncWriteExt;
-    use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
     use tokio::net::TcpStream;
     use tokio::task::LocalSet;
 
@@ -611,22 +609,14 @@ mod tests {
         let localset = LocalSet::new();
         let (port, ret) = localset
             .run_until(async {
-                // Start the server
                 let server = run_server(opts).await.expect("creating server failed");
                 let port = server.port;
 
-                let spawner = ClientSpawner { port };
+                let spawner = ClientSpawner::new(port);
 
-                // Spawn the server future
                 let server_fut = tokio::task::spawn_local(server.future);
-
-                // Run the test
                 let ret = func(spawner).await.expect("test failed");
-
-                // Tell the server to shut down
                 server.tx.send(()).unwrap();
-
-                // Wait until it shuts down
                 server_fut.await.unwrap().unwrap();
 
                 (port, ret)
@@ -637,116 +627,6 @@ mod tests {
             .await
             .expect_err("server is still alive");
         ret
-    }
-
-    struct Client {
-        writer: MessageWriter<ClientToServerMsg, OwnedWriteHalf>,
-        reader: MessageReader<ServerToClientMsg, OwnedReadHalf>,
-    }
-
-    impl Client {
-        async fn join(&mut self, name: &str) {
-            self.send(ClientToServerMsg::Join {
-                name: name.to_string(),
-            })
-            .await;
-            let msg = self.recv().await;
-            assert!(matches!(msg, ServerToClientMsg::Welcome));
-        }
-
-        async fn ping(&mut self) {
-            self.send(ClientToServerMsg::Ping).await;
-            let msg = self.recv().await;
-            assert!(matches!(msg, ServerToClientMsg::Pong));
-        }
-
-        async fn list_users(&mut self) -> Vec<String> {
-            self.send(ClientToServerMsg::ListUsers).await;
-            let msg = self.recv().await;
-            match msg {
-                ServerToClientMsg::UserList { mut users } => {
-                    users.sort();
-                    users
-                }
-                msg => {
-                    panic!("Unexpected response {msg:?}");
-                }
-            }
-        }
-
-        async fn dm(&mut self, to: &str, message: &str) {
-            self.send(ClientToServerMsg::SendDM {
-                to: to.to_string(),
-                message: message.to_string(),
-            })
-            .await;
-        }
-
-        async fn expect_message(&mut self, expected_from: &str, expected_message: &str) {
-            let msg = self.recv().await;
-            match msg {
-                ServerToClientMsg::Message { from, message } => {
-                    assert_eq!(from, expected_from);
-                    assert_eq!(message, expected_message);
-                }
-                msg => panic!("Unexpected message {msg:?}"),
-            }
-        }
-
-        async fn send(&mut self, msg: ClientToServerMsg) {
-            self.writer.send(msg).await.expect("cannot send message");
-        }
-
-        async fn try_send(&mut self, msg: ClientToServerMsg) -> anyhow::Result<()> {
-            self.writer.send(msg).await
-        }
-
-        async fn expect_error(&mut self, expected_error: &str) {
-            let msg = self.recv().await;
-            match msg {
-                ServerToClientMsg::Error(error) => {
-                    assert_eq!(error, expected_error);
-                }
-                msg => {
-                    panic!("Unexpected response {msg:?}");
-                }
-            }
-        }
-
-        async fn recv(&mut self) -> ServerToClientMsg {
-            self.reader
-                .recv()
-                .await
-                .expect("connection was closed")
-                .expect("did not receive welcome message")
-        }
-
-        async fn close(self) {
-            self.writer.into_inner().shutdown().await.unwrap();
-        }
-
-        async fn check_closed(mut self) {
-            assert!(matches!(self.reader.recv().await, None | Some(Err(_))));
-        }
-    }
-
-    #[derive(Copy, Clone)]
-    struct ClientSpawner {
-        port: u16,
-    }
-
-    impl ClientSpawner {
-        async fn client(&self) -> Client {
-            let client = TcpStream::connect(("127.0.0.1", self.port))
-                .await
-                .expect("cannot connect to server");
-
-            let (rx, tx) = client.into_split();
-
-            let reader = MessageReader::<ServerToClientMsg, _>::new(rx);
-            let writer = MessageWriter::<ClientToServerMsg, _>::new(tx);
-            Client { reader, writer }
-        }
     }
 
     async fn sleep(duration_ms: u64) {
