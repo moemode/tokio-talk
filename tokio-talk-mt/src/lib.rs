@@ -4,7 +4,7 @@
 pub use crate::server::RunningServer;
 
 pub mod client;
-mod messages;
+pub mod messages;
 mod reader;
 mod writer;
 

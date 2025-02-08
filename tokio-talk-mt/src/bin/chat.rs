@@ -107,18 +107,15 @@ async fn handle_input(
 
     // Start a background task to receive messages
     tokio::spawn({
-        let mut client = client.clone();
         async move {
-            while let Ok(msg) = client.recv().await {
-                match msg {
-                    tokio_talk_mt::messages::ServerToClientMsg::Message { from, message } => {
-                        println!("{}: {}", from, message);
-                    }
-                    tokio_talk_mt::messages::ServerToClientMsg::Error(err) => {
-                        eprintln!("Error: {}", err);
-                    }
-                    _ => {}
+            match client.recv().await {
+                tokio_talk_mt::messages::ServerToClientMsg::Message { from, message } => {
+                    println!("{}: {}", from, message);
                 }
+                tokio_talk_mt::messages::ServerToClientMsg::Error(err) => {
+                    eprintln!("Error: {}", err);
+                }
+                _ => {}
             }
         }
     });
