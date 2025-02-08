@@ -206,6 +206,12 @@ async fn handle_client(
     Ok(())
 }
 
+/// Handles sending an error message to a client
+async fn send_error(writer: &SharedWriter, error_msg: String) -> anyhow::Result<()> {
+    let mut locked_writer = writer.lock().await;
+    locked_writer.send(ServerToClientMsg::Error(error_msg)).await
+}
+
 /// Processes an individual client message and send appropriate responses.
 ///
 /// # Message Handling
@@ -228,30 +234,27 @@ async fn react_client_msg(
     name: &str,
     clients: &ClientMap,
 ) -> anyhow::Result<()> {
+    let clients_guard = clients.read().await;
+    let sender = match clients_guard.get(name) {
+        Some(writer) => writer,
+        None => return Ok(()),
+    };
+
     match msg {
         ClientToServerMsg::Ping => {
-            let clients_guard = clients.read().await;
-            if let Some(writer) = clients_guard.get(name) {
-                let mut locked_writer = writer.lock().await;
-                locked_writer.send(ServerToClientMsg::Pong).await?;
-            }
+            let mut writer = sender.lock().await;
+            writer.send(ServerToClientMsg::Pong).await?;
         }
         ClientToServerMsg::ListUsers => {
-            let clients_guard = clients.read().await;
             let users = clients_guard.keys().cloned().collect();
-            if let Some(writer) = clients_guard.get(name) {
-                let mut locked_writer = writer.lock().await;
-                locked_writer
-                    .send(ServerToClientMsg::UserList { users })
-                    .await?;
-            }
+            let mut writer = sender.lock().await;
+            writer.send(ServerToClientMsg::UserList { users }).await?;
         }
         ClientToServerMsg::Broadcast { message } => {
-            let clients_guard = clients.read().await;
             for (client_name, writer) in clients_guard.iter() {
                 if client_name != name {
-                    let mut locked_writer = writer.lock().await;
-                    locked_writer
+                    let mut writer = writer.lock().await;
+                    writer
                         .send(ServerToClientMsg::Message {
                             from: name.into(),
                             message: message.clone(),
@@ -261,50 +264,28 @@ async fn react_client_msg(
             }
         }
         ClientToServerMsg::SendDM { to, message } => {
-            let clients_guard = clients.read().await;
-            let sender_writer = clients_guard.get(name);
-            let target_writer = clients_guard.get(&to);
-
-            match (sender_writer, target_writer) {
-                (Some(writer), _) if to == *name => {
-                    let mut locked_writer = writer.lock().await;
-                    locked_writer
-                        .send(ServerToClientMsg::Error(
-                            "Cannot send a DM to yourself".to_owned(),
-                        ))
-                        .await?;
-                }
-                (Some(writer), None) => {
-                    let mut locked_writer = writer.lock().await;
-                    locked_writer
-                        .send(ServerToClientMsg::Error(format!(
-                            "User {to} does not exist"
-                        )))
-                        .await?;
-                }
-                (_, Some(target_writer)) => {
-                    let mut locked_writer = target_writer.lock().await;
-                    locked_writer
-                        .send(ServerToClientMsg::Message {
-                            from: name.into(),
-                            message,
-                        })
-                        .await?;
-                }
-                _ => {}
+            if to == *name {
+                return send_error(sender, "Cannot send a DM to yourself".to_owned()).await;
             }
+
+            let target = match clients_guard.get(&to) {
+                Some(writer) => writer,
+                None => {
+                    return send_error(sender, format!("User {to} does not exist")).await;
+                }
+            };
+
+            let mut writer = target.lock().await;
+            writer
+                .send(ServerToClientMsg::Message {
+                    from: name.into(),
+                    message,
+                })
+                .await?;
         }
         _ => {
-            let clients_guard = clients.read().await;
-            if let Some(writer) = clients_guard.get(name) {
-                let mut locked_writer = writer.lock().await;
-                locked_writer
-                    .send(ServerToClientMsg::Error(
-                        "Unexpected message received".to_owned(),
-                    ))
-                    .await?;
-                anyhow::bail!("Unexpected message received");
-            }
+            send_error(sender, "Unexpected message received".to_owned()).await?;
+            anyhow::bail!("Unexpected message received");
         }
     }
     Ok(())
