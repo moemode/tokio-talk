@@ -54,6 +54,28 @@ pub struct RunningServer {
     pub tx: tokio::sync::oneshot::Sender<()>,
 }
 
+/// Main server loop that accepts client connections and manages client tasks.
+///
+/// # Arguments
+/// * `shutdown_rx` - Receiver for shutdown signal
+/// * `listener` - TCP listener for accepting new connections
+/// * `max_clients` - Maximum number of concurrent client connections allowed
+///
+/// # Operation
+/// The server loop:
+/// 1. Accepts new client connections
+/// 2. Rejects connections when at max capacity
+/// 3. Spawns a task for each connected client
+/// 4. Monitors client tasks for completion
+/// 5. Gracefully shuts down when signaled
+///
+/// The loop continues until a shutdown signal is received through `shutdown_rx`.
+/// During shutdown, it stops accepting new connections and waits for existing
+/// client tasks to complete.
+///
+/// # Returns
+/// * `Ok(())` on successful shutdown
+/// * `Err` if there are errors accepting connections or managing client tasks
 async fn run_server(
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     listener: tokio::net::TcpListener,
