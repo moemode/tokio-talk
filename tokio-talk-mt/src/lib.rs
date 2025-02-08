@@ -3,10 +3,11 @@
 
 pub use crate::server::RunningServer;
 
-mod messages;
+pub mod messages;
 mod reader;
 mod writer;
 
+pub mod client;
 pub mod server;
 
 #[derive(Copy, Clone)]
