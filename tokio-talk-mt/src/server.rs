@@ -37,18 +37,16 @@
 //! - Sending DM to self -> "Cannot send a DM to yourself" error
 //! - Sending DM to nonexistent user -> "User <name> does not exist" error
 //! - Sending `Join` after already joined -> "Unexpected message received" error
-use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
-use tokio::{
-    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
-    sync::{Mutex, RwLock},
-};
-
-use tokio::task::JoinSet;
-
 use crate::{
     messages::{ClientToServerMsg, ServerToClientMsg},
     reader::MessageReader,
     writer::MessageWriter,
+};
+use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
+use tokio::task::JoinSet;
+use tokio::{
+    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+    sync::{Mutex, RwLock},
 };
 
 type SharedWriter = Mutex<MessageWriter<ServerToClientMsg, OwnedWriteHalf>>;
