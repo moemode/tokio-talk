@@ -90,12 +90,12 @@ async fn main() -> anyhow::Result<()> {
 
 fn print_help() {
     println!("\nAvailable commands:");
-    println!("  /help           - Show this help");
-    println!("  /list           - List connected users");
-    println!("  /dm <user> msg  - Send private message to user");
-    println!("  /b <message>    - Broadcast message to all users");
-    println!("  /quit           - Exit the chat");
-    println!("  message         - Send broadcast message to all users");
+    println!("  /h             - Show this help");
+    println!("  /l             - List connected users");
+    println!("  /d <user> msg  - Send private message to user");
+    println!("  /b <message>   - Broadcast message to all users");
+    println!("  /q             - Exit the chat");
+    println!("  message        - Send broadcast message to all users");
 }
 
 async fn handle_input(
@@ -105,9 +105,9 @@ async fn handle_input(
     if line.starts_with('/') {
         let parts: Vec<&str> = line[1..].splitn(2, ' ').collect();
         match parts[0] {
-            "help" => print_help(),
-            "quit" => return Ok(true),
-            "list" => {
+            "h" => print_help(),
+            "q" => return Ok(true),
+            "l" => {
                 writer.list_users().await;
             }
             "b" => {
@@ -117,19 +117,19 @@ async fn handle_input(
                 }
                 writer.broadcast(parts[1]).await;
             }
-            "dm" => {
+            "d" => {
                 if parts.len() != 2 {
-                    println!("Usage: /dm <username> message");
+                    println!("Usage: /d <username> message");
                     return Ok(false);
                 }
                 let dm_parts: Vec<&str> = parts[1].splitn(2, ' ').collect();
                 if dm_parts.len() != 2 {
-                    println!("Usage: /dm <username> message");
+                    println!("Usage: /d <username> message");
                     return Ok(false);
                 }
                 writer.dm(dm_parts[0], dm_parts[1]).await;
             }
-            _ => println!("Unknown command. Type /help for available commands."),
+            _ => println!("Unknown command. Type /h for available commands."),
         }
     }
 
