@@ -295,6 +295,11 @@ async fn react_client_msg(
         ClientToServerMsg::ListUsers => {
             let users = clients_guard.keys().cloned().collect();
             let mut writer = sender.lock().await;
+            println!(
+                "Sending user list to {name}: {users:?}",
+                name = name,
+                users = users
+            );
             writer.send(ServerToClientMsg::UserList { users }).await?;
         }
         ClientToServerMsg::Broadcast { message } => {

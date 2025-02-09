@@ -6,15 +6,12 @@ use tokio_talk_mt::messages::ServerToClientMsg;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Server address to connect to
     #[arg(short, long, default_value = "127.0.0.1")]
     address: String,
 
-    /// Server port to connect to
     #[arg(short, long)]
     port: u16,
 
-    /// Username to join with
     #[arg(short, long)]
     username: String,
 }
@@ -48,7 +45,18 @@ async fn main() -> anyhow::Result<()> {
                 ServerToClientMsg::Error(err) => {
                     eprintln!("Error: {}", err);
                 }
-                _ => {}
+                ServerToClientMsg::UserList { users } => {
+                    println!("Connected users:");
+                    for user in users {
+                        println!("  {}", user);
+                    }
+                }
+                ServerToClientMsg::Welcome => {
+                    println!("Server acknowledged connection");
+                }
+                ServerToClientMsg::Pong => {
+                    println!("Server responded with pong");
+                }
             }
         }
     });
@@ -123,8 +131,6 @@ async fn handle_input(
             }
             _ => println!("Unknown command. Type /help for available commands."),
         }
-    } else {
-        writer.broadcast(line).await;
     }
 
     Ok(false)
