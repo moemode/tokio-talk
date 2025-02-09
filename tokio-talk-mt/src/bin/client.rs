@@ -174,7 +174,14 @@ async fn main() -> anyhow::Result<()> {
 
     match reader.recv().await {
         ServerToClientMsg::Welcome => println!("Successfully joined chat!"),
-        _ => panic!("Did not receive welcome message"),
+        ServerToClientMsg::Error(e) if e == "Username already taken" => {
+            eprintln!(
+                "{}",
+                "Error: Username already taken. Please try a different username.".red()
+            );
+            return Ok(());
+        }
+        msg => panic!("Unexpected response from server: {:?}", msg),
     }
 
     TerminalUi::print_help();
