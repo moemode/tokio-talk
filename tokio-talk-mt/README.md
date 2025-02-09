@@ -2,7 +2,7 @@
 
 A Rust chat server implementation using Tokio's async/await with true multi-threading support.
 The server leverages Tokio's thread pool to handle concurrent client connections and message processing.
-Find at [server.rs](src/server.rs).
+Find it at [server.rs](src/server.rs).
 
 ## Architecture
 

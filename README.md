@@ -29,6 +29,33 @@ type ClientMap = Arc<RwLock<HashMap<String, SharedWriter>>>;
 The writer half of the TCP stream is shared via the ClientMap, while each client handler future owns its reader. 
 
 
+## How to use
+
+### Starting the server
+From the project directory, run:
+```bash
+# Start the server (it will print the port number)
+cargo run --bin server
+# Example output: Server listening on port 46521
+```
+
+### Connecting with a client
+In another terminal, connect using:
+```bash
+cargo run --bin client -- --username <your_name> --port <server_port>
+
+# Example:
+cargo run --bin client -- --username alice --port 46521
+```
+
+### Available chat commands
+Once connected, you can use these commands:
+- `/h` - Show help menu
+- `/l` - List connected users
+- `/d <user> <message>` - Send private message
+- `/b <message>` - Broadcast message to all users
+- `/q` - Quit the chat
+
 ### Features
 - Client name choice via Join messages
 - Direct messaging between clients
