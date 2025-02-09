@@ -1,5 +1,6 @@
 use clap::Parser;
-use std::io::{self, BufRead};
+use colored::*;
+use std::io::{self, BufRead, Write};
 use tokio_talk_mt::client::ClientSpawner;
 use tokio_talk_mt::messages::ServerToClientMsg;
 
@@ -14,6 +15,16 @@ struct Args {
 
     #[arg(short, long)]
     username: String,
+}
+
+fn print_prompt() {
+    print!("{}", ">>> ".green());
+    io::stdout().flush().unwrap();
+}
+
+fn clear_line() {
+    print!("\r\x1b[K");
+    io::stdout().flush().unwrap();
 }
 
 #[tokio::main]
@@ -40,22 +51,32 @@ async fn main() -> anyhow::Result<()> {
         loop {
             match reader.recv().await {
                 ServerToClientMsg::Message { from, message } => {
-                    println!("{}: {}", from, message);
+                    clear_line();
+                    println!("{}: {}", from.cyan().bold(), message.cyan());
+                    print_prompt();
                 }
                 ServerToClientMsg::Error(err) => {
-                    eprintln!("Error: {}", err);
+                    clear_line();
+                    eprintln!("{}", format!("Error: {}", err).red());
+                    print_prompt();
                 }
                 ServerToClientMsg::UserList { users } => {
-                    println!("Connected users:");
+                    clear_line();
+                    println!("{}", "Connected users:".yellow());
                     for user in users {
-                        println!("  {}", user);
+                        println!("  {}", user.yellow());
                     }
+                    print_prompt();
                 }
                 ServerToClientMsg::Welcome => {
-                    println!("Server acknowledged connection");
+                    clear_line();
+                    println!("{}", "Server acknowledged connection".yellow());
+                    print_prompt();
                 }
                 ServerToClientMsg::Pong => {
-                    println!("Server responded with pong");
+                    clear_line();
+                    println!("{}", "Server responded with pong".yellow());
+                    print_prompt();
                 }
             }
         }
@@ -64,12 +85,15 @@ async fn main() -> anyhow::Result<()> {
     let mut stdin = io::stdin().lock();
     let mut line = String::new();
 
+    print_prompt();
+
     loop {
         line.clear();
         stdin.read_line(&mut line)?;
         let line = line.trim();
 
         if line.is_empty() {
+            print_prompt();
             continue;
         }
 
@@ -78,8 +102,12 @@ async fn main() -> anyhow::Result<()> {
                 if should_quit {
                     break;
                 }
+                print_prompt();
             }
-            Err(e) => eprintln!("Error: {}", e),
+            Err(e) => {
+                eprintln!("{}", format!("Error: {}", e).red());
+                print_prompt();
+            }
         }
     }
 
@@ -89,13 +117,20 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn print_help() {
-    println!("\nAvailable commands:");
-    println!("  /h             - Show this help");
-    println!("  /l             - List connected users");
-    println!("  /d <user> msg  - Send private message to user");
-    println!("  /b <message>   - Broadcast message to all users");
-    println!("  /q             - Exit the chat");
-    println!("  message        - Send broadcast message to all users");
+    println!("\n{}", "Available commands:".yellow());
+    println!("  {}  - Show this help", "/h".green());
+    println!("  {}  - List connected users", "/l".green());
+    println!(
+        "  {} {} - Send private message to user",
+        "/d".green(),
+        "<user> msg".cyan()
+    );
+    println!(
+        "  {} {} - Broadcast message to all users",
+        "/b".green(),
+        "<message>".cyan()
+    );
+    println!("  {}  - Exit the chat", "/q".green());
 }
 
 async fn handle_input(
