@@ -27,4 +27,3 @@ Find it at [server.rs](tokio-talk-st/src/server.rs).
 - Direct messaging between clients
 - Broadcast messages to all connected clients
 - User listing
-- Connection health checks via Ping/Pong

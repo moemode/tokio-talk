@@ -31,4 +31,3 @@ The chat server uses a thread-safe shared state architecture built on Tokio's mu
 - Direct messaging between clients
 - Broadcast messages to all connected clients
 - User listing
-- Connection health checks via Ping/Pong

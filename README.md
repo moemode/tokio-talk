@@ -65,4 +65,3 @@ Once connected, you can use these commands:
 - Direct messaging between clients
 - Broadcast messages to all connected clients
 - User listing
-- Connection health checks via Ping/Pong
