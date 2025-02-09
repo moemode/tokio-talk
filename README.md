@@ -7,6 +7,10 @@ This repository contains two async chat server implementations in Rust using Tok
 | Single-threaded | [server.rs](tokio-talk-st/src/server.rs) |
 | Multi-threaded | [server.rs](tokio-talk-mt/src/server.rs) |
 
+Originally developed when I self-studied the [Programming in Rust course](https://github.com/Kobzol/rust-course-fei) at FEI VŠB-TUO.
+No solutions were available to me, I completely wrote the server.rs in both cases.
+I also added a simple terminal client.
+
 ## Approaches
 
 ### Single-threaded Version
