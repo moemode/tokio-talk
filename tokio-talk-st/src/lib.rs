@@ -4,11 +4,11 @@
 
 pub use crate::server::RunningServer;
 
-mod messages;
+pub mod client;
+pub mod messages;
 mod reader;
-mod writer;
-
 mod server;
+mod writer;
 
 #[derive(Copy, Clone)]
 pub struct ServerOpts {
