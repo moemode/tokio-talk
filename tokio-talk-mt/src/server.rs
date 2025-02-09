@@ -54,8 +54,6 @@ type ClientMap = Arc<RwLock<HashMap<String, SharedWriter>>>;
 
 /// A running chat server instance
 pub struct RunningServer {
-    /// Maximum number of clients that can be connected to the server
-    max_clients: usize,
     /// Port on which the server is running
     pub port: u16,
     /// Main future of the server
@@ -318,7 +316,6 @@ impl RunningServer {
         let port = listener.local_addr()?.port();
         let server_future = run_server(rx, listener, max_clients);
         Ok(RunningServer {
-            max_clients,
             port,
             future: Box::pin(server_future),
             tx,
