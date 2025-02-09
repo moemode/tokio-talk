@@ -131,6 +131,36 @@ async fn handle_server_messages(mut reader: tokio_talk_mt::client::ClientReader)
     }
 }
 
+async fn run_command_loop(
+    stdin: &mut impl BufRead,
+    line: &mut String,
+    command_handler: &mut CommandHandler<'_>,
+) -> anyhow::Result<()> {
+    loop {
+        line.clear();
+        stdin.read_line(line)?;
+        let line = line.trim();
+
+        if line.starts_with('/') {
+            let parts: Vec<&str> = line[1..].splitn(2, ' ').collect();
+            let command = parts[0];
+            let args = parts.get(1).copied();
+            match command_handler.handle_command(command, args).await {
+                Ok(should_quit) => {
+                    if should_quit {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{}", format!("Error: {}", e).red());
+                }
+            }
+        }
+        TerminalUi::print_prompt();
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -157,35 +187,7 @@ async fn main() -> anyhow::Result<()> {
 
     TerminalUi::print_prompt();
 
-    loop {
-        line.clear();
-        stdin.read_line(&mut line)?;
-        let line = line.trim();
-
-        if line.is_empty() {
-            TerminalUi::print_prompt();
-            continue;
-        }
-
-        if line.starts_with('/') {
-            let parts: Vec<&str> = line[1..].splitn(2, ' ').collect();
-            let command = parts[0];
-            let args = parts.get(1).copied();
-
-            match command_handler.handle_command(command, args).await {
-                Ok(should_quit) => {
-                    if should_quit {
-                        break;
-                    }
-                    TerminalUi::print_prompt();
-                }
-                Err(e) => {
-                    eprintln!("{}", format!("Error: {}", e).red());
-                    TerminalUi::print_prompt();
-                }
-            }
-        }
-    }
+    run_command_loop(&mut stdin, &mut line, &mut command_handler).await?;
 
     writer.close().await;
     reader_handle.abort();
